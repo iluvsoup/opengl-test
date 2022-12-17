@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 	"runtime"
@@ -29,12 +30,12 @@ func main() {
 
 	vertexShaderSource, err := Asset("assets/vertex.glsl")
 	if err != nil {
-		panic(err)
+		throwError(err)
 	}
 
 	fragmentShaderSource, err := Asset("assets/frag.glsl")
 	if err != nil {
-		panic(err)
+		throwError(err)
 	}
 
 	program := initOpenGL(
@@ -67,10 +68,23 @@ func compileShader(source string, shaderType uint32) (uint32, error) {
 		log := strings.Repeat("\x00", int(logLength+1))
 		gl.GetShaderInfoLog(shader, logLength, nil, gl.Str(log))
 
-		return 0, fmt.Errorf("Failed to compile %v: %v", source, log)
+		gl.DeleteShader(shader)
+
+		return 0, fmt.Errorf("Failed to compile shader\n%v: %v", source, log)
 	}
 
 	return shader, nil
+}
+
+func throwWarning(warningMessage string) {
+	fmt.Println("warning:\x1b[1;33m", warningMessage, "\x1b[0m")
+}
+
+func throwError(errorMessage error) {
+	fmt.Print("\n")
+	panic(
+		fmt.Sprint("\x1b[1;31m", errorMessage),
+	)
 }
 
 func makeVao(points []float32) uint32 {
@@ -108,23 +122,31 @@ func keyCallback(window *glfw.Window, key glfw.Key, scancode int, action glfw.Ac
 
 func initOpenGL(vertexShaderSource string, fragmentShaderSource string) uint32 {
 	if err := gl.Init(); err != nil {
-		panic(err)
+		throwError(err)
 	}
+
+	version := gl.GoStr(gl.GetString(gl.VERSION))
+	fmt.Println(version)
 
 	vertexShader, err := compileShader(vertexShaderSource, gl.VERTEX_SHADER)
 	if err != nil {
-		panic(err)
+		throwError(err)
 	}
 
 	fragmentShader, err := compileShader(fragmentShaderSource, gl.FRAGMENT_SHADER)
 	if err != nil {
-		panic(err)
+		throwError(err)
 	}
 
 	program := gl.CreateProgram()
 	gl.AttachShader(program, vertexShader)
 	gl.AttachShader(program, fragmentShader)
+
 	gl.LinkProgram(program)
+	gl.ValidateProgram(program)
+
+	gl.DeleteShader(vertexShader)
+	gl.DeleteShader(fragmentShader)
 
 	return program
 }
@@ -133,8 +155,6 @@ func initGlfw(width, height int, name string) *glfw.Window {
 	if err := glfw.Init(); err != nil {
 		panic(err)
 	}
-
-	glfw.WindowHint(glfw.Resizable, glfw.True)
 
 	// openGL v4.6
 	glfw.WindowHint(glfw.ContextVersionMajor, 4)
@@ -145,7 +165,7 @@ func initGlfw(width, height int, name string) *glfw.Window {
 
 	window, err := glfw.CreateWindow(width, height, name, nil, nil)
 	if err != nil {
-		panic(err)
+		throwError(err)
 	}
 
 	window.MakeContextCurrent()
@@ -157,7 +177,7 @@ func initGlfw(width, height int, name string) *glfw.Window {
 func setIcon(window *glfw.Window, filename string) {
 	imageBytes, err := Asset(filename)
 	if err != nil {
-		panic(err)
+		throwError(err)
 	}
 
 	reader := bytes.NewReader(imageBytes)
@@ -166,7 +186,7 @@ func setIcon(window *glfw.Window, filename string) {
 
 	png, _, err := image.Decode(reader)
 	if err != nil {
-		panic(err)
+		throwError(err)
 	}
 
 	// Dunno why it takes an array tbh
