@@ -7,6 +7,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -14,10 +15,28 @@ import (
 	glfw "github.com/go-gl/glfw/v3.3/glfw"
 )
 
-var test = []float32{
-	0, 0.5, 0,
-	-0.5, -0.5, 0,
-	0.5, -0.5, 0,
+var positions = []float32{
+	-0.5, -0.5,
+	0.5, -0.5,
+	0.5, 0.5,
+	-0.5, 0.5,
+}
+
+var indices = []uint32{
+	0, 1, 2,
+	2, 3, 0,
+}
+
+func sizeofuint() int {
+	return int(reflect.TypeOf((*uint)(nil)).Elem().Size())
+}
+
+func sizeofint() int {
+	return int(reflect.TypeOf((*int)(nil)).Elem().Size())
+}
+
+func sizeoffloat32() int {
+	return 4
 }
 
 func main() {
@@ -43,10 +62,34 @@ func main() {
 		string(fragmentShaderSource)+"\x00",
 	)
 
-	triangle := makeVao(test)
+	gl.UseProgram(program)
+	defer gl.DeleteProgram(program)
+
+	var vbo uint32
+	gl.GenBuffers(1, &vbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+	gl.BufferData(gl.ARRAY_BUFFER, len(positions)*sizeoffloat32(), gl.Ptr(positions), gl.STATIC_DRAW)
+
+	var vao uint32
+	gl.GenVertexArrays(1, &vao)
+	gl.BindVertexArray(vao)
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+
+	gl.EnableVertexAttribArray(0)
+	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 0, nil)
+
+	var ibo uint32
+	gl.GenBuffers(1, &ibo)
+	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
+	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(indices)*sizeofuint(), gl.Ptr(indices), gl.STATIC_DRAW)
 
 	for !window.ShouldClose() {
-		draw(triangle, window, program)
+		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+		gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+
+		glfw.PollEvents()
+		window.SwapBuffers()
 	}
 }
 
@@ -87,33 +130,6 @@ func throwError(errorMessage error) {
 	)
 }
 
-func makeVao(points []float32) uint32 {
-	var vbo uint32
-	gl.GenBuffers(1, &vbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
-	gl.BufferData(gl.ARRAY_BUFFER, 4*len(points), gl.Ptr(points), gl.STATIC_DRAW)
-
-	var vao uint32
-	gl.GenVertexArrays(1, &vao)
-	gl.BindVertexArray(vao)
-	gl.EnableVertexAttribArray(0)
-	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 0, nil)
-
-	return vao
-}
-
-func draw(vao uint32, window *glfw.Window, program uint32) {
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-	gl.UseProgram(program)
-
-	gl.BindVertexArray(vao)
-	gl.DrawArrays(gl.TRIANGLES, 0, int32(len(test)/3))
-
-	glfw.PollEvents()
-	window.SwapBuffers()
-}
-
 func keyCallback(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 	if key == glfw.KeyQ && action == glfw.Press {
 		fmt.Println("HI")
@@ -126,7 +142,7 @@ func initOpenGL(vertexShaderSource string, fragmentShaderSource string) uint32 {
 	}
 
 	version := gl.GoStr(gl.GetString(gl.VERSION))
-	fmt.Println(version)
+	fmt.Println("\x1b[1m" + version + "\x1b[0m")
 
 	vertexShader, err := compileShader(vertexShaderSource, gl.VERTEX_SHADER)
 	if err != nil {

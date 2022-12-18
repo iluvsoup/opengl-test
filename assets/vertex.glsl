@@ -1,7 +1,8 @@
-#version 460
+// switch to higher version when needed, try to keep it low for compatibility
+#version 330 core
 
-in vec3 vp;
+layout(location=0)in vec4 vp;
 
 void main(){
-  gl_Position=vec4(vp,1.);
+  gl_Position=vp;
 }
