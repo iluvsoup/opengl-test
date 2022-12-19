@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"unsafe"
 
 	gl "github.com/go-gl/gl/v4.6-core/gl"
 	glfw "github.com/go-gl/glfw/v3.3/glfw"
@@ -119,20 +120,58 @@ func compileShader(source string, shaderType uint32) (uint32, error) {
 	return shader, nil
 }
 
+func throwNotification(notificationMessage string) {
+	fmt.Println("\x1b[1;34m" + notificationMessage + "\x1b[0m")
+}
+
 func throwWarning(warningMessage string) {
-	fmt.Println("warning:\x1b[1;33m", warningMessage, "\x1b[0m")
+	fmt.Println("\x1b[1;33m" + warningMessage + "\x1b[0m")
 }
 
 func throwError(errorMessage error) {
 	fmt.Print("\n")
 	panic(
-		fmt.Sprint("\x1b[1;31m", errorMessage),
+		"\x1b[1;31m" + fmt.Sprint(errorMessage),
 	)
 }
 
 func keyCallback(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 	if key == glfw.KeyQ && action == glfw.Press {
 		fmt.Println("HI")
+	}
+}
+
+func messageCallback(source uint32, gltype uint32, id uint32, severity uint32, length int32, message string, userparam unsafe.Pointer) {
+	var messageType string
+	switch gltype {
+		case gl.DEBUG_TYPE_ERROR:							  messageType = "Error"
+		case gl.DEBUG_TYPE_DEPRECATED_BEHAVIOR: messageType = "Deprecated behavior"
+		case gl.DEBUG_TYPE_UNDEFINED_BEHAVIOR:  messageType = "Undefined behavior"
+		case gl.DEBUG_TYPE_PORTABILITY: 				messageType = "Portability issue"
+		case gl.DEBUG_TYPE_PERFORMANCE: 				messageType = "Performance issue"
+		case gl.DEBUG_TYPE_MARKER: 							messageType = "Marker"
+		case gl.DEBUG_TYPE_OTHER: 							messageType = "Other"
+	}
+
+	var messageSource string
+	switch source {
+	case gl.DEBUG_SOURCE_API: 						messageSource = "OpenGL API"
+	case gl.DEBUG_SOURCE_WINDOW_SYSTEM: 	messageSource = "Window-system API"
+	case gl.DEBUG_SOURCE_SHADER_COMPILER: messageSource = "Shader compiler"
+	case gl.DEBUG_SOURCE_THIRD_PARTY: 		messageSource = "Application associated with OpenGL"
+	case gl.DEBUG_SOURCE_APPLICATION: 		messageSource = "The user of this application"
+	case gl.DEBUG_SOURCE_OTHER: 					messageSource = "Other"
+	}
+
+	newMessage := messageType + ": " + message + "\n	Source: " + messageSource
+	if severity == gl.DEBUG_SEVERITY_HIGH {
+		throwError(fmt.Errorf(newMessage))
+	} else if severity == gl.DEBUG_SEVERITY_MEDIUM {
+		throwWarning(newMessage)
+	} else if severity == gl.DEBUG_SEVERITY_LOW {
+		throwNotification(newMessage)
+	} else if severity == gl.DEBUG_SEVERITY_NOTIFICATION {
+		fmt.Println(newMessage)
 	}
 }
 
@@ -143,6 +182,9 @@ func initOpenGL(vertexShaderSource string, fragmentShaderSource string) uint32 {
 
 	version := gl.GoStr(gl.GetString(gl.VERSION))
 	fmt.Println("\x1b[1m" + version + "\x1b[0m")
+
+	gl.Enable(gl.DEBUG_OUTPUT)
+	gl.DebugMessageCallback(messageCallback, nil)
 
 	vertexShader, err := compileShader(vertexShaderSource, gl.VERTEX_SHADER)
 	if err != nil {
