@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
+	// "strings"
 	"unsafe"
 
 	gl "github.com/go-gl/gl/v4.6-core/gl"
@@ -28,17 +30,13 @@ var indices = []uint32{
 	2, 3, 0,
 }
 
-func sizeofuint() int {
-	return int(reflect.TypeOf((*uint)(nil)).Elem().Size())
-}
 
 func sizeofint() int {
 	return int(reflect.TypeOf((*int)(nil)).Elem().Size())
 }
 
-func sizeoffloat32() int {
-	return 4
-}
+func sizeofuint32() int { return 4 }
+func sizeoffloat32() int { return 4 }
 
 func main() {
 	runtime.LockOSThread() // This is because GLFW has to run on the same thread it was initialized on
@@ -58,18 +56,29 @@ func main() {
 		throwError(err)
 	}
 
-	program := initOpenGL(
+	program, err := initOpenGL(
 		string(vertexShaderSource)+"\x00", // \x00 is required because openGL
 		string(fragmentShaderSource)+"\x00",
 	)
 
+	if err != nil {
+		throwError(err)
+	}
+
 	gl.UseProgram(program)
 	defer gl.DeleteProgram(program)
+
+	// send color
+	location := gl.GetUniformLocation(program, gl.Str("u_Color" + "\x00"))
+	if location == -1 {
+		throwWarning("Could not find location of uniform u_Color")
+	}
 
 	var vbo uint32
 	gl.GenBuffers(1, &vbo)
 	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
 	gl.BufferData(gl.ARRAY_BUFFER, len(positions)*sizeoffloat32(), gl.Ptr(positions), gl.STATIC_DRAW)
+	defer gl.DeleteBuffers(1, &vbo)
 
 	var vao uint32
 	gl.GenVertexArrays(1, &vao)
@@ -78,19 +87,53 @@ func main() {
 
 	gl.EnableVertexAttribArray(0)
 	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 0, nil)
+	defer gl.DeleteVertexArrays(1, &vao)
 
 	var ibo uint32
 	gl.GenBuffers(1, &ibo)
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
-	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(indices)*sizeofuint(), gl.Ptr(indices), gl.STATIC_DRAW)
+	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(indices)*sizeofuint32(), gl.Ptr(indices), gl.STATIC_DRAW)
+	defer gl.DeleteBuffers(1, &ibo)
+
+	var r float32 = 0.0
+	var r_increment float32 = 0.01
+
+	var g float32 = 0.0
+	var g_increment float32 = 0.02
+
+	var b float32 = 0.0
+	var b_increment float32 = 0.03
 
 	for !window.ShouldClose() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
+		gl.Uniform4f(location, r, g, b, 1.0)
 		gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
 		glfw.PollEvents()
 		window.SwapBuffers()
+
+		r += r_increment
+		g += g_increment
+		b += b_increment
+
+		if r > 1.0 {
+			r_increment = -0.01
+		} else if r < 0 {
+			r_increment = 0.01
+		}
+
+		if g > 1.0 {
+			g_increment = -0.02
+		} else if r < 0 {
+			g_increment = 0.02
+		}
+
+		if b > 1.0 {
+			b_increment = -0.03
+		} else if r < 0 {
+			b_increment = 0.03
+		}
 	}
 }
 
@@ -104,7 +147,7 @@ func compileShader(source string, shaderType uint32) (uint32, error) {
 
 	var status int32
 	gl.GetShaderiv(shader, gl.COMPILE_STATUS, &status)
-
+	
 	if status == gl.FALSE {
 		var logLength int32
 		gl.GetShaderiv(shader, gl.INFO_LOG_LENGTH, &logLength)
@@ -114,9 +157,9 @@ func compileShader(source string, shaderType uint32) (uint32, error) {
 
 		gl.DeleteShader(shader)
 
-		return 0, fmt.Errorf("Failed to compile shader\n%v: %v", source, log)
+		return 0, fmt.Errorf("Failed to compile shader: %v", log)
 	}
-
+	
 	return shader, nil
 }
 
@@ -155,12 +198,12 @@ func messageCallback(source uint32, gltype uint32, id uint32, severity uint32, l
 
 	var messageSource string
 	switch source {
-	case gl.DEBUG_SOURCE_API: 						messageSource = "OpenGL API"
-	case gl.DEBUG_SOURCE_WINDOW_SYSTEM: 	messageSource = "Window-system API"
-	case gl.DEBUG_SOURCE_SHADER_COMPILER: messageSource = "Shader compiler"
-	case gl.DEBUG_SOURCE_THIRD_PARTY: 		messageSource = "Application associated with OpenGL"
-	case gl.DEBUG_SOURCE_APPLICATION: 		messageSource = "The user of this application"
-	case gl.DEBUG_SOURCE_OTHER: 					messageSource = "Other"
+		case gl.DEBUG_SOURCE_API: 						messageSource = "OpenGL API"
+		case gl.DEBUG_SOURCE_WINDOW_SYSTEM: 	messageSource = "Window-system API"
+		case gl.DEBUG_SOURCE_SHADER_COMPILER: messageSource = "Shader compiler"
+		case gl.DEBUG_SOURCE_THIRD_PARTY: 		messageSource = "Application associated with OpenGL"
+		case gl.DEBUG_SOURCE_APPLICATION: 		messageSource = "The user of this application"
+		case gl.DEBUG_SOURCE_OTHER: 					messageSource = "Other"
 	}
 
 	newMessage := messageType + ": " + message + "\n	Source: " + messageSource
@@ -175,7 +218,7 @@ func messageCallback(source uint32, gltype uint32, id uint32, severity uint32, l
 	}
 }
 
-func initOpenGL(vertexShaderSource string, fragmentShaderSource string) uint32 {
+func initOpenGL(vertexShaderSource string, fragmentShaderSource string) (uint32, error) {
 	if err := gl.Init(); err != nil {
 		throwError(err)
 	}
@@ -203,10 +246,22 @@ func initOpenGL(vertexShaderSource string, fragmentShaderSource string) uint32 {
 	gl.LinkProgram(program)
 	gl.ValidateProgram(program)
 
+	var status int32
+	gl.GetProgramiv(program, gl.LINK_STATUS, &status)
+	if status == gl.FALSE {
+		var logLength int32
+		gl.GetProgramiv(program, gl.INFO_LOG_LENGTH, &logLength)
+
+		log := strings.Repeat("\x00", int(logLength+1))
+		gl.GetProgramInfoLog(program, logLength, nil, gl.Str(log))
+
+		return 0, fmt.Errorf("failed to link program: %v", log)
+	}
+
 	gl.DeleteShader(vertexShader)
 	gl.DeleteShader(fragmentShader)
 
-	return program
+	return program, nil
 }
 
 func initGlfw(width, height int, name string) *glfw.Window {
@@ -227,6 +282,8 @@ func initGlfw(width, height int, name string) *glfw.Window {
 	}
 
 	window.MakeContextCurrent()
+	glfw.SwapInterval(1)
+
 	window.SetKeyCallback(keyCallback)
 
 	return window
