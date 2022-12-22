@@ -7,11 +7,11 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"math"
 	"reflect"
 	"runtime"
 	"strings"
-
-	// "strings"
+	"time"
 	"unsafe"
 
 	gl "github.com/go-gl/gl/v4.6-core/gl"
@@ -29,6 +29,8 @@ var indices = []uint32{
 	0, 1, 2,
 	2, 3, 0,
 }
+
+const nanosecond = 1000000000 // 10^9, one nanosecond is one billionth of a second
 
 
 func sizeofint() int {
@@ -95,6 +97,9 @@ func main() {
 	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(indices)*sizeofuint32(), gl.Ptr(indices), gl.STATIC_DRAW)
 	defer gl.DeleteBuffers(1, &ibo)
 
+	var previousTime int64
+	var fpsUpdatePreviousTime int64
+
 	var r float32 = 0.0
 	var r_increment float32 = 0.01
 
@@ -105,6 +110,21 @@ func main() {
 	var b_increment float32 = 0.03
 
 	for !window.ShouldClose() {
+		// FPS
+		currentTime := time.Now().UnixNano()
+		elapsedTime := float64(currentTime - fpsUpdatePreviousTime) / nanosecond
+
+		if elapsedTime >= 1 {
+			deltaTime := float64(currentTime - previousTime) / nanosecond
+			fps := int(math.Round(1 / deltaTime))
+			window.SetTitle(fmt.Sprintf("%d FPS", fps))
+
+			fpsUpdatePreviousTime = currentTime
+		}
+		
+		previousTime = currentTime
+		
+
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 		gl.Uniform4f(location, r, g, b, 1.0)
@@ -269,7 +289,7 @@ func initGlfw(width, height int, name string) *glfw.Window {
 		panic(err)
 	}
 
-	// openGL v4.6
+	// opengl v4.6
 	glfw.WindowHint(glfw.ContextVersionMajor, 4)
 	glfw.WindowHint(glfw.ContextVersionMinor, 6)
 
