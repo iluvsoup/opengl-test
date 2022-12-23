@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/draw"
 	_ "image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -22,9 +23,9 @@ import (
 // X,Y, U,V
 var positions = []float32{
 	-0.5, -0.5, 0.0, 0.0,
-	0.5, -0.5, 1.0, 0.0,
-	0.5, 0.5, 1.0, 1.0,
-	-0.5, 0.5, 0.0, 1.0,
+	 0.5, -0.5, 1.0, 0.0,
+	 0.5,  0.5, 1.0, 1.0,
+	-0.5,  0.5, 0.0, 1.0,
 }
 
 var indices = []uint32{
@@ -88,9 +89,12 @@ func main() {
 	defer gl.DeleteVertexArrays(1, &vao)
 	
 	gl.BindVertexArray(vao)
+
+	gl.VertexAttribPointerWithOffset(0, 2, gl.FLOAT, false, 4*4, 0)
 	gl.EnableVertexAttribArray(0)
-	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, 0, nil)
-	gl.VertexAttribPointer(2, 2, gl.FLOAT, false, 0, nil)
+
+	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 4*4, 2*4)
+	gl.EnableVertexAttribArray(1)
 
 
 	// index buffer
@@ -104,7 +108,6 @@ func main() {
 
 
 	// texture
-	/*
 	catBytes, err := Asset("assets/cat.png")
 	if err != nil {
 		util.ThrowError(err)
@@ -117,14 +120,10 @@ func main() {
 	}
 
 	catTexture := image.NewRGBA(catImage.Bounds())
-*/
-	// what does this do
 
-	/*if rgba.Stride != rgba.Rect.Size().X*4 {
-		return 0, fmt.Errorf("unsupported stride")
-	}*/
-	// draw.Draw(catTexture, catTexture.Bounds(), catImage, image.Point{0, 0}, draw.Src)
-	/*
+	// stolen
+	draw.Draw(catTexture, catTexture.Bounds(), catImage, image.Point{0, 0}, draw.Src)
+	
 	var texture uint32
 	gl.GenTextures(1, &texture)
 
@@ -155,14 +154,11 @@ func main() {
 	catBytes = nil
 	catImage = nil
 	catTexture = nil
-	*/
 
 	
 	// bind texture to texture slot 0
-	/*
 	textureLocation := uniformLocation("u_Texture", &program)
 	gl.Uniform1i(textureLocation, 0)
-	*/
 	
 	var previousTime int64
 	var fpsUpdatePreviousTime int64
