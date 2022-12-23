@@ -1,10 +1,15 @@
 // switch to higher version when needed, try to keep it low for compatibility
 #version 330 core
 
-layout(location = 0) out vec4 frag_colour;
+layout(location = 0) out vec4 color;
+
+in vec2 v_TexCoord;
 
 uniform vec4 u_Color;
+uniform sampler2D u_Texture;
 
 void main() {
-  frag_colour = u_Color;
+  // vec4 texColor = texture(u_Texture, v_TexCoord);
+  // color = texColor;
+  color = u_Color;
 }
