@@ -13,7 +13,6 @@ import (
 	"math"
 	"runtime"
 	"strings"
-	"time"
 	"unsafe"
 
 	gl "github.com/go-gl/gl/v4.6-core/gl"
@@ -33,13 +32,11 @@ var indices = []uint32{
 	2, 3, 0,
 }
 
-const nanosecond = 1000000000 // 10^9, one nanosecond is one billionth of a second
-
-
 func main() {
 	runtime.LockOSThread() // This is because GLFW has to run on the same thread it was initialized on
 
 	window := initGlfw(800, 600, "test")
+	defer glfw.Terminate()
 
 	cat, err := Asset("assets/cat.png")
 	if err != nil {
@@ -48,7 +45,6 @@ func main() {
 
 	setIcon(window, cat)
 
-	defer glfw.Terminate()
 
 	vertexShaderSource, err := Asset("assets/vertex.glsl")
 	if err != nil {
@@ -65,12 +61,13 @@ func main() {
 		string(fragmentShaderSource)+"\x00",
 	)
 
+	defer gl.DeleteProgram(program)
+
 	if err != nil {
 		util.ThrowError(err)
 	}
 
 	gl.UseProgram(program)
-	defer gl.DeleteProgram(program)
 
 
 	// vertex buffer
@@ -85,22 +82,20 @@ func main() {
 	// vertex array
 	var vao uint32
 	gl.GenVertexArrays(1, &vao)
-
 	defer gl.DeleteVertexArrays(1, &vao)
 	
 	gl.BindVertexArray(vao)
 
-	gl.VertexAttribPointerWithOffset(0, 2, gl.FLOAT, false, 4*4, 0)
+	gl.VertexAttribPointerWithOffset(0, 2, gl.FLOAT, false, int32(4*util.Sizeoffloat32()), 0)
 	gl.EnableVertexAttribArray(0)
 
-	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 4*4, 2*4)
+	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, int32(4*util.Sizeoffloat32()), 2*4)
 	gl.EnableVertexAttribArray(1)
 
 
 	// index buffer
 	var ibo uint32
 	gl.GenBuffers(1, &ibo)
-
 	defer gl.DeleteBuffers(1, &ibo)
 	
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
@@ -120,13 +115,12 @@ func main() {
 	}
 
 	catTexture := image.NewRGBA(catImage.Bounds())
-
 	// stolen
 	draw.Draw(catTexture, catTexture.Bounds(), catImage, image.Point{0, 0}, draw.Src)
-	
+	flippedPixels := flipImage(catTexture)
+
 	var texture uint32
 	gl.GenTextures(1, &texture)
-
 	defer gl.DeleteTextures(1, &texture)
 	
 	gl.BindTexture(gl.TEXTURE_2D, texture)
@@ -135,7 +129,7 @@ func main() {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	
+
 	gl.TexImage2D(
 		gl.TEXTURE_2D,
 		0,
@@ -145,7 +139,7 @@ func main() {
 		0,
 		gl.RGBA,
 		gl.UNSIGNED_BYTE,
-		gl.Ptr(catTexture.Pix),
+		gl.Ptr(flippedPixels),
 	)
 
 	gl.ActiveTexture(gl.TEXTURE0)
@@ -160,27 +154,22 @@ func main() {
 	textureLocation := uniformLocation("u_Texture", &program)
 	gl.Uniform1i(textureLocation, 0)
 	
-	var previousTime int64
-	var fpsUpdatePreviousTime int64
+	var previousTime float64
+	var fpsUpdatePreviousTime float64
 
-	var r float32 = 0.0
-	var r_increment float32 = 0.005
-
-	var g float32 = 0.0
-	var g_increment float32 = 0.01
-
-	var b float32 = 0.0
-	var b_increment float32 = 0.015
+	var r float32 = 0.0; var r_phase bool = true;
+	var g float32 = 0.0; var g_phase bool = true;
+	var b float32 = 0.0; var b_phase bool = true;
 
 	colorLocation := uniformLocation("u_Color", &program)
 
 	for !window.ShouldClose() {
 		// FPS
-		currentTime := time.Now().UnixNano()
-		elapsedTime := float64(currentTime - fpsUpdatePreviousTime) / nanosecond
+		currentTime := glfw.GetTime()
+		deltaTime := currentTime - previousTime
+		timeSinceFPSUpdate := currentTime - fpsUpdatePreviousTime
 
-		if elapsedTime >= 1 {
-			deltaTime := float64(currentTime - previousTime) / nanosecond
+		if timeSinceFPSUpdate >= 1 {
 			fps := int(math.Round(1 / deltaTime))
 			window.SetTitle(fmt.Sprintf("%d FPS", fps))
 
@@ -197,28 +186,38 @@ func main() {
 		glfw.PollEvents()
 		window.SwapBuffers()
 
-		r += r_increment
-		g += g_increment
-		b += b_increment
+		deltaTime32 := float32(deltaTime)
 
-		if r > 1.0 {
-			r_increment = -0.005
-		} else if r < 0 {
-			r_increment = 0.005
-		}
+		// "mimimimimimi ugly code"
+		// stfu it's compact
+		if (r_phase == true) { r += deltaTime32 * 0.50 } else { r -= deltaTime32 * 0.50 }
+		if (g_phase == true) { g += deltaTime32 * 0.25 } else { g -= deltaTime32 * 0.25 }
+		if (b_phase == true) { b += deltaTime32 * 0.10 } else { b -= deltaTime32 * 0.10 }
 
-		if g > 1.0 {
-			g_increment = -0.01
-		} else if r < 0 {
-			g_increment = 0.01
-		}
+		if (r >= 1) { r_phase = false } else if (r <= 0) { r_phase = true }
+		if (g >= 1) { g_phase = false } else if (g <= 0) { g_phase = true }
+		if (b >= 1) { b_phase = false } else if (b <= 0) { b_phase = true }
+	}
+}
 
-		if b > 1.0 {
-			b_increment = -0.015
-		} else if r < 0 {
-			b_increment = 0.015
+func flipImage(image *image.RGBA) []uint8 {
+	pixels := make([]uint8, len(image.Pix))
+	imageX := image.Rect.Size().X
+	imageY := image.Rect.Size().Y
+
+	for y := 0; y < imageY; y++ {	
+		for x := 0; x < imageX; x++ {
+			index := (y * imageX + x) * 4
+			flippedIndex := ((imageY - y - 1) * imageX + x) * 4
+
+			pixels[index + 0] = image.Pix[flippedIndex + 0]
+			pixels[index + 1] = image.Pix[flippedIndex + 1]
+			pixels[index + 2] = image.Pix[flippedIndex + 2]
+			pixels[index + 3] = image.Pix[flippedIndex + 3]
 		}
 	}
+
+	return pixels
 }
 
 func uniformLocation(name string, program *uint32) int32 {
@@ -352,7 +351,7 @@ func initOpenGL(vertexShaderSource string, fragmentShaderSource string) (uint32,
 
 func initGlfw(width, height int, name string) *glfw.Window {
 	if err := glfw.Init(); err != nil {
-		panic(err)
+		util.ThrowError(err)
 	}
 
 	// opengl v4.6
