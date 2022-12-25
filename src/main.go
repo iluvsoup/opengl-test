@@ -17,6 +17,9 @@ import (
 
 	gl "github.com/go-gl/gl/v4.6-core/gl"
 	glfw "github.com/go-gl/glfw/v3.3/glfw"
+
+	// not actually glm but I'll call it glm anyway
+	glm "github.com/go-gl/mathgl/mgl32"
 )
 
 // X,Y, U,V
@@ -153,7 +156,9 @@ func main() {
 	// bind texture to texture slot 0
 	textureLocation := uniformLocation("u_Texture", &program)
 	gl.Uniform1i(textureLocation, 0)
-	
+
+	mvpLocation := uniformLocation("u_MVP", &program)
+
 	var previousTime float64
 	var fpsUpdatePreviousTime float64
 
@@ -179,6 +184,11 @@ func main() {
 		previousTime = currentTime
 
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+		screenX, screenY := window.GetSize()
+		aspectRatio := float32(screenX) / float32(screenY)
+		mvp := glm.Ortho(-aspectRatio, aspectRatio, -1.0, 1.0, -1.0, 1.0)
+		gl.UniformMatrix4fv(mvpLocation, 1, false, &mvp[0])
 
 		gl.Uniform4f(colorLocation, r, g, b, 1.0)
 		gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
