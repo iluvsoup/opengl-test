@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+
 	"image/draw"
 	_ "image/draw"
 	_ "image/gif"
@@ -23,6 +24,7 @@ import (
 )
 
 // X,Y, U,V
+/*
 var positions = []float32{
 	-0.5, -0.5, 0.0, 0.0,
 	 0.5, -0.5, 1.0, 0.0,
@@ -34,11 +36,39 @@ var indices = []uint32{
 	0, 1, 2,
 	2, 3, 0,
 }
+*/
+
+// X,Y,Z, U,V
+var positions = []float32{
+	 1.0, -1.0, -1.0,   1.0, 0.0,
+	 1.0, -1.0,  1.0,   0.0, 0.0,
+	-1.0, -1.0,  1.0,   1.0, 1.0,
+	-1.0, -1.0, -1.0,   1.0, 0.0,
+	 1.0,  1.0, -1.0,   0.0, 0.0,
+	 1.0,  1.0,  1.0,   1.0, 1.0,
+	-1.0,  1.0,  1.0,   1.0, 0.0,
+	-1.0,  1.0, -1.0,   0.0, 1.0,
+}
+
+var indices = []uint32{
+	1, 2, 3,
+	7, 6, 5,
+	4, 5, 1,
+	5, 6, 2,
+	2, 6, 7,
+	0, 3, 7,
+	0, 1, 3,
+	4, 7, 5,
+	0, 4, 1,
+	1, 5, 2,
+	3, 2, 7,
+	4, 0, 7,
+}
 
 func main() {
 	runtime.LockOSThread() // This is because GLFW has to run on the same thread it was initialized on
 
-	window := initGlfw(800, 600, "test")
+	window := initGlfw(600, 800, "test")
 	defer glfw.Terminate()
 
 	cat, err := Asset("assets/cat.png")
@@ -89,11 +119,11 @@ func main() {
 	
 	gl.BindVertexArray(vao)
 
-	gl.VertexAttribPointerWithOffset(0, 2, gl.FLOAT, false, int32(4*util.Sizeoffloat32()), 0)
 	gl.EnableVertexAttribArray(0)
+	gl.VertexAttribPointerWithOffset(0, 3, gl.FLOAT, false, int32(5*util.Sizeoffloat32()), 0)
 
-	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, int32(4*util.Sizeoffloat32()), 2*4)
 	gl.EnableVertexAttribArray(1)
+	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, int32(5*util.Sizeoffloat32()), uintptr(3*util.Sizeoffloat32()))
 
 
 	// index buffer
@@ -106,7 +136,7 @@ func main() {
 
 
 	// texture
-	catBytes, err := Asset("assets/cat.png")
+	catBytes, err := Asset("assets/morgana.jpg")
 	if err != nil {
 		util.ThrowError(err)
 	}
@@ -157,6 +187,8 @@ func main() {
 	textureLocation := uniformLocation("u_Texture", &program)
 	gl.Uniform1i(textureLocation, 0)
 
+	
+	colorLocation := uniformLocation("u_Color", &program)
 	mvpLocation := uniformLocation("u_MVP", &program)
 
 	var previousTime float64
@@ -166,7 +198,7 @@ func main() {
 	var g float32 = 0.0; var g_phase bool = true;
 	var b float32 = 0.0; var b_phase bool = true;
 
-	colorLocation := uniformLocation("u_Color", &program)
+	var angle float32 = 0.0;
 
 	for !window.ShouldClose() {
 		// FPS
@@ -187,16 +219,24 @@ func main() {
 
 		screenX, screenY := window.GetSize()
 		aspectRatio := float32(screenX) / float32(screenY)
-		mvp := glm.Ortho(-aspectRatio, aspectRatio, -1.0, 1.0, -1.0, 1.0)
+		
+		projection := glm.Perspective(glm.DegToRad(90), aspectRatio, 0.01, 1000.0)
+		view := glm.LookAtV(glm.Vec3{3,3,3}, glm.Vec3{0,0,0}, glm.Vec3{0,1,0})
+		model := glm.HomogRotate3D(angle, glm.Vec3{0, 1, 0})
+		
+		mvp := projection.Mul4(view).Mul4(model)
 		gl.UniformMatrix4fv(mvpLocation, 1, false, &mvp[0])
 
 		gl.Uniform4f(colorLocation, r, g, b, 1.0)
-		gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+		gl.DrawElements(gl.TRIANGLES, int32(len(indices)), gl.UNSIGNED_INT, nil)
+		// gl.DrawArrays(gl.POINTS, 0, int32(len(positions) / 3))
 
 		glfw.PollEvents()
 		window.SwapBuffers()
 
 		deltaTime32 := float32(deltaTime)
+
+		angle += deltaTime32
 
 		// "mimimimimimi ugly code"
 		// stfu it's compact
@@ -279,6 +319,13 @@ func keyCallback(window *glfw.Window, key glfw.Key, scancode int, action glfw.Ac
 	}
 }
 
+func resizeCallback(window *glfw.Window, width int, height int) {
+	gl.Viewport(0, 0, int32(width), int32(height))
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+	
+	window.SwapBuffers()
+}
+
 func messageCallback(source uint32, gltype uint32, id uint32, severity uint32, length int32, message string, userparam unsafe.Pointer) {
 	var messageType string
 	switch gltype {
@@ -323,6 +370,9 @@ func initOpenGL(vertexShaderSource string, fragmentShaderSource string) (uint32,
 
 	gl.Enable(gl.DEBUG_OUTPUT)
 	gl.DebugMessageCallback(messageCallback, nil)
+
+	gl.Enable(gl.DEPTH_TEST)
+	gl.DepthFunc(gl.LESS)
 
 	vertexShader, err := compileShader(vertexShaderSource, gl.VERTEX_SHADER)
 	if err != nil {
@@ -380,6 +430,7 @@ func initGlfw(width, height int, name string) *glfw.Window {
 	glfw.SwapInterval(1)
 
 	window.SetKeyCallback(keyCallback)
+	window.SetSizeCallback(resizeCallback)
 
 	return window
 }
