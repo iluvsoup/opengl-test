@@ -6,4 +6,12 @@ requirements:
 - opengl
 - glfw
 
-todo: build tool for building cross platform so you don't have to mess around with x86_64-w64-mingw32-gcc
+TODO:
+
+- build tool
+- make obj parsing work with index buffer
+- triangulation? how to handle faces with 5 vertices
+- proper shading
+- anti aliasing
+- ability to render multiple objects
+- shadows
