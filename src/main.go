@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"strconv"
 
 	"image/draw"
 	_ "image/draw"
@@ -22,48 +23,6 @@ import (
 	// not actually glm but I'll call it glm anyway
 	glm "github.com/go-gl/mathgl/mgl32"
 )
-
-// X,Y, U,V
-/*
-var positions = []float32{
-	-0.5, -0.5, 0.0, 0.0,
-	 0.5, -0.5, 1.0, 0.0,
-	 0.5,  0.5, 1.0, 1.0,
-	-0.5,  0.5, 0.0, 1.0,
-}
-
-var indices = []uint32{
-	0, 1, 2,
-	2, 3, 0,
-}
-*/
-
-// X,Y,Z, U,V
-var positions = []float32{
-	 1.0, -1.0, -1.0,   1.0, 0.0,
-	 1.0, -1.0,  1.0,   0.0, 0.0,
-	-1.0, -1.0,  1.0,   1.0, 1.0,
-	-1.0, -1.0, -1.0,   1.0, 0.0,
-	 1.0,  1.0, -1.0,   0.0, 0.0,
-	 1.0,  1.0,  1.0,   1.0, 1.0,
-	-1.0,  1.0,  1.0,   1.0, 0.0,
-	-1.0,  1.0, -1.0,   0.0, 1.0,
-}
-
-var indices = []uint32{
-	1, 2, 3,
-	7, 6, 5,
-	4, 5, 1,
-	5, 6, 2,
-	2, 6, 7,
-	0, 3, 7,
-	0, 1, 3,
-	4, 7, 5,
-	0, 4, 1,
-	1, 5, 2,
-	3, 2, 7,
-	4, 0, 7,
-}
 
 func main() {
 	runtime.LockOSThread() // This is because GLFW has to run on the same thread it was initialized on
@@ -102,6 +61,12 @@ func main() {
 
 	gl.UseProgram(program)
 
+	obj, err := Asset("assets/burger2.obj")
+	if err != nil {
+		util.ThrowError(err)
+	}
+
+	vertices := parseObj(&obj)
 
 	// vertex buffer
 	var vbo uint32
@@ -109,7 +74,7 @@ func main() {
 	defer gl.DeleteBuffers(1, &vbo)
 	
 	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
-	gl.BufferData(gl.ARRAY_BUFFER, len(positions)*util.Sizeoffloat32(), gl.Ptr(positions), gl.STATIC_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, len(vertices)*util.Sizeoffloat32(), gl.Ptr(vertices), gl.STATIC_DRAW)
 
 
 	// vertex array
@@ -127,16 +92,17 @@ func main() {
 
 
 	// index buffer
+	/*
 	var ibo uint32
 	gl.GenBuffers(1, &ibo)
 	defer gl.DeleteBuffers(1, &ibo)
 	
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
 	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(indices)*util.Sizeofuint32(), gl.Ptr(indices), gl.STATIC_DRAW)
-
+	*/
 
 	// texture
-	catBytes, err := Asset("assets/morgana.jpg")
+	catBytes, err := Asset("assets/texture2.png")
 	if err != nil {
 		util.ThrowError(err)
 	}
@@ -158,8 +124,8 @@ func main() {
 	
 	gl.BindTexture(gl.TEXTURE_2D, texture)
 	
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
@@ -186,19 +152,15 @@ func main() {
 	// bind texture to texture slot 0
 	textureLocation := uniformLocation("u_Texture", &program)
 	gl.Uniform1i(textureLocation, 0)
-
 	
-	colorLocation := uniformLocation("u_Color", &program)
 	mvpLocation := uniformLocation("u_MVP", &program)
 
 	var previousTime float64
 	var fpsUpdatePreviousTime float64
 
-	var r float32 = 0.0; var r_phase bool = true;
-	var g float32 = 0.0; var g_phase bool = true;
-	var b float32 = 0.0; var b_phase bool = true;
-
 	var angle float32 = 0.0;
+	
+	var previousCursorX float64
 
 	for !window.ShouldClose() {
 		// FPS
@@ -220,34 +182,97 @@ func main() {
 		screenX, screenY := window.GetSize()
 		aspectRatio := float32(screenX) / float32(screenY)
 		
+		cursorX, _ := window.GetCursorPos()
+		deltaCursorX := cursorX - previousCursorX
+		angle += float32(deltaCursorX * 0.01)
+		previousCursorX = cursorX
+
 		projection := glm.Perspective(glm.DegToRad(90), aspectRatio, 0.01, 1000.0)
-		view := glm.LookAtV(glm.Vec3{3,3,3}, glm.Vec3{0,0,0}, glm.Vec3{0,1,0})
-		model := glm.HomogRotate3D(angle, glm.Vec3{0, 1, 0})
-		
+		view := glm.LookAtV(glm.Vec3{2,0.5,2}, glm.Vec3{0,0,0}, glm.Vec3{0,1,0})
+		model := glm.Translate3D(0, -0.5, 0).Mul4(glm.HomogRotate3DY(angle))
+
 		mvp := projection.Mul4(view).Mul4(model)
 		gl.UniformMatrix4fv(mvpLocation, 1, false, &mvp[0])
 
-		gl.Uniform4f(colorLocation, r, g, b, 1.0)
-		gl.DrawElements(gl.TRIANGLES, int32(len(indices)), gl.UNSIGNED_INT, nil)
-		// gl.DrawArrays(gl.POINTS, 0, int32(len(positions) / 3))
+		// gl.DrawElements(gl.TRIANGLES, int32(len(indices)), gl.UNSIGNED_INT, nil)
+		gl.DrawArrays(gl.TRIANGLES, 0, int32(len(vertices)))
 
 		glfw.PollEvents()
 		window.SwapBuffers()
-
-		deltaTime32 := float32(deltaTime)
-
-		angle += deltaTime32
-
-		// "mimimimimimi ugly code"
-		// stfu it's compact
-		if (r_phase == true) { r += deltaTime32 * 0.50 } else { r -= deltaTime32 * 0.50 }
-		if (g_phase == true) { g += deltaTime32 * 0.25 } else { g -= deltaTime32 * 0.25 }
-		if (b_phase == true) { b += deltaTime32 * 0.10 } else { b -= deltaTime32 * 0.10 }
-
-		if (r >= 1) { r_phase = false } else if (r <= 0) { r_phase = true }
-		if (g >= 1) { g_phase = false } else if (g <= 0) { g_phase = true }
-		if (b >= 1) { b_phase = false } else if (b <= 0) { b_phase = true }
 	}
+}
+
+// dirty code
+func parseObj(obj *[]byte) []float32 {
+	source := string(*obj)
+	lines := strings.Split(source, "\n")
+
+	var positions []float32
+	var textureCoordinates []float32
+	var vertices []float32
+
+	for _, line := range lines {
+		components := strings.Split(line, " ")
+		dataType := components[0]
+
+		if dataType == "v" {
+			// obj stores uv coordinates and other values as 16 bit floats (i think)
+			x, err := strconv.ParseFloat(components[1], 16)
+			if err != nil {
+				util.ThrowError(err)
+			}
+
+			y, err := strconv.ParseFloat(components[2], 16)
+			if err != nil {
+				util.ThrowError(err)
+			}
+
+			z, err := strconv.ParseFloat(components[3], 16)
+			if err != nil {
+				util.ThrowError(err)
+			}
+
+			positions = append(positions, float32(x), float32(y), float32(z))
+		} else if dataType == "vt" {
+			u, err := strconv.ParseFloat(components[1], 16)
+			if err != nil {
+				util.ThrowError(err)
+			}
+
+			v, err := strconv.ParseFloat(components[2], 16)
+			if err != nil {
+				util.ThrowError(err)
+			}
+
+			textureCoordinates = append(textureCoordinates, float32(u), float32(v))
+		} else if dataType == "f" {
+			for v := 1; v <= 3; v++ {
+				indices := strings.Split(components[v], "/")
+				
+				positionIndex, err := strconv.ParseInt(indices[0], 10, 32)
+				if err != nil {
+					util.ThrowError(err)
+				}
+				
+				textureCoordinateIndex, err := strconv.ParseInt(indices[1], 10, 32)
+				if err != nil {
+					util.ThrowError(err)
+				}
+
+				// Have to subtract one because the indices in .obj files are 1-based
+				x := positions[(positionIndex - 1) * 3 + 0]
+				y := positions[(positionIndex - 1) * 3 + 1]
+				z := positions[(positionIndex - 1) * 3 + 2]
+
+				u := textureCoordinates[(textureCoordinateIndex - 1) * 2 + 0]
+				v := textureCoordinates[(textureCoordinateIndex - 1) * 2 + 1]
+
+				vertices = append(vertices, x, y, z, u, v)
+			}
+		}
+	}
+
+	return vertices
 }
 
 func flipImage(image *image.RGBA) []uint8 {
