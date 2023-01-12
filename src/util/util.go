@@ -3,6 +3,7 @@ package util
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 )
 
 func Sizeofint() int {
@@ -25,4 +26,20 @@ func ThrowError(errorMessage error) {
 	panic(
 		"\x1b[1;31m" + fmt.Sprint(errorMessage),
 	)
+}
+
+func ParseFloat(s string, bitSize int) float64 {
+	number, err := strconv.ParseFloat(s, bitSize)
+	if err != nil {
+		ThrowError(err)
+	}
+	return number
+}
+
+func ParseInt(s string, base int, bitSize int) int64 {
+	number, err := strconv.ParseInt(s, base, bitSize)
+	if err != nil {
+		ThrowError(err)
+	}
+	return number
 }

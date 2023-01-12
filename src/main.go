@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	"strconv"
 
 	"image/draw"
 	_ "image/draw"
@@ -61,7 +60,7 @@ func main() {
 
 	gl.UseProgram(program)
 
-	obj, err := Asset("assets/burger2.obj")
+	obj, err := Asset("assets/burger.obj")
 	if err != nil {
 		util.ThrowError(err)
 	}
@@ -102,7 +101,7 @@ func main() {
 	*/
 
 	// texture
-	catBytes, err := Asset("assets/texture2.png")
+	catBytes, err := Asset("assets/texture.png")
 	if err != nil {
 		util.ThrowError(err)
 	}
@@ -155,6 +154,8 @@ func main() {
 	
 	mvpLocation := uniformLocation("u_MVP", &program)
 
+	const BURGER_COUNT = 25;
+
 	var previousTime float64
 	var fpsUpdatePreviousTime float64
 
@@ -188,14 +189,15 @@ func main() {
 		previousCursorX = cursorX
 
 		projection := glm.Perspective(glm.DegToRad(90), aspectRatio, 0.01, 1000.0)
-		view := glm.LookAtV(glm.Vec3{2,0.5,2}, glm.Vec3{0,0,0}, glm.Vec3{0,1,0})
-		model := glm.Translate3D(0, -0.5, 0).Mul4(glm.HomogRotate3DY(angle))
+		view := glm.LookAtV(glm.Vec3{10, 5, 10}, glm.Vec3{0, 0, 0}, glm.Vec3{0, 1, 0})
+		model := glm.Translate3D(0, 2, 0).Mul4(glm.HomogRotate3DY(angle))
 
 		mvp := projection.Mul4(view).Mul4(model)
 		gl.UniformMatrix4fv(mvpLocation, 1, false, &mvp[0])
 
 		// gl.DrawElements(gl.TRIANGLES, int32(len(indices)), gl.UNSIGNED_INT, nil)
-		gl.DrawArrays(gl.TRIANGLES, 0, int32(len(vertices)))
+		// gl.DrawArrays(gl.TRIANGLES, 0, int32(len(vertices)))
+		gl.DrawArraysInstanced(gl.TRIANGLES, 0, int32(len(vertices)), BURGER_COUNT)
 
 		glfw.PollEvents()
 		window.SwapBuffers()
@@ -217,47 +219,22 @@ func parseObj(obj *[]byte) []float32 {
 
 		if dataType == "v" {
 			// obj stores uv coordinates and other values as 16 bit floats (i think)
-			x, err := strconv.ParseFloat(components[1], 16)
-			if err != nil {
-				util.ThrowError(err)
-			}
-
-			y, err := strconv.ParseFloat(components[2], 16)
-			if err != nil {
-				util.ThrowError(err)
-			}
-
-			z, err := strconv.ParseFloat(components[3], 16)
-			if err != nil {
-				util.ThrowError(err)
-			}
+			x := util.ParseFloat(components[1], 16)
+			y := util.ParseFloat(components[2], 16)
+			z := util.ParseFloat(components[3], 16)
 
 			positions = append(positions, float32(x), float32(y), float32(z))
 		} else if dataType == "vt" {
-			u, err := strconv.ParseFloat(components[1], 16)
-			if err != nil {
-				util.ThrowError(err)
-			}
-
-			v, err := strconv.ParseFloat(components[2], 16)
-			if err != nil {
-				util.ThrowError(err)
-			}
+			u := util.ParseFloat(components[1], 16)
+			v := util.ParseFloat(components[2], 16)
 
 			textureCoordinates = append(textureCoordinates, float32(u), float32(v))
 		} else if dataType == "f" {
 			for v := 1; v <= 3; v++ {
 				indices := strings.Split(components[v], "/")
 				
-				positionIndex, err := strconv.ParseInt(indices[0], 10, 32)
-				if err != nil {
-					util.ThrowError(err)
-				}
-				
-				textureCoordinateIndex, err := strconv.ParseInt(indices[1], 10, 32)
-				if err != nil {
-					util.ThrowError(err)
-				}
+				positionIndex := util.ParseInt(indices[0], 10, 32)
+				textureCoordinateIndex := util.ParseInt(indices[1], 10, 32)
 
 				// Have to subtract one because the indices in .obj files are 1-based
 				x := positions[(positionIndex - 1) * 3 + 0]
