@@ -153,8 +153,11 @@ func main() {
 	gl.Uniform1i(textureLocation, 0)
 	
 	mvpLocation := uniformLocation("u_MVP", &program)
+	burgerCountLocation := uniformLocation("u_BurgerCount", &program)
+	radiusLocation := uniformLocation("u_Radius", &program)
 
-	const BURGER_COUNT = 25;
+	var burgerCount int32 = 25;
+	var radius float32 = 10;
 
 	var previousTime float64
 	var fpsUpdatePreviousTime float64
@@ -183,21 +186,31 @@ func main() {
 		screenX, screenY := window.GetSize()
 		aspectRatio := float32(screenX) / float32(screenY)
 		
-		cursorX, _ := window.GetCursorPos()
+		cursorX, cursorY := window.GetCursorPos()
+		
+		normalizedCursorX := cursorX / float64(screenX / 2.0) - 1
+		normalizedCursorY := cursorY / float64(screenY / 2.0) - 1
+
+		cursorDistanceFromCenter := math.Sqrt(math.Pow(normalizedCursorX, 2) + math.Pow(normalizedCursorY, 2))
+		radius = float32(cursorDistanceFromCenter) * 15
+
 		deltaCursorX := cursorX - previousCursorX
 		angle += float32(deltaCursorX * 0.01)
 		previousCursorX = cursorX
 
 		projection := glm.Perspective(glm.DegToRad(90), aspectRatio, 0.01, 1000.0)
 		view := glm.LookAtV(glm.Vec3{10, 5, 10}, glm.Vec3{0, 0, 0}, glm.Vec3{0, 1, 0})
-		model := glm.Translate3D(0, 2, 0).Mul4(glm.HomogRotate3DY(angle))
+		model := glm.Translate3D(0, 0, 0).Mul4(glm.HomogRotate3DY(angle))
 
 		mvp := projection.Mul4(view).Mul4(model)
 		gl.UniformMatrix4fv(mvpLocation, 1, false, &mvp[0])
 
+		gl.Uniform1i(burgerCountLocation, burgerCount)
+		gl.Uniform1f(radiusLocation, radius)
+
 		// gl.DrawElements(gl.TRIANGLES, int32(len(indices)), gl.UNSIGNED_INT, nil)
 		// gl.DrawArrays(gl.TRIANGLES, 0, int32(len(vertices)))
-		gl.DrawArraysInstanced(gl.TRIANGLES, 0, int32(len(vertices)), BURGER_COUNT)
+		gl.DrawArraysInstanced(gl.TRIANGLES, 0, int32(len(vertices)), burgerCount)
 
 		glfw.PollEvents()
 		window.SwapBuffers()
